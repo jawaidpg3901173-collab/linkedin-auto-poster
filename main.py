@@ -10,7 +10,7 @@ try:
 except ImportError:
     pass
 
-import google.generativeai as genai
+from google import genai
 
 # Configure logging
 logging.basicConfig(
@@ -33,7 +33,7 @@ def get_required_env_var(var_name: str) -> str:
 def generate_linkedin_post(gemini_api_key: str) -> str:
     """Generate an engaging LinkedIn post about business automation using Google Gemini API."""
     logger.info("Initializing Google Gemini API...")
-    genai.configure(api_key=gemini_api_key)
+    client = genai.Client(api_key=gemini_api_key)
 
     prompt = (
         "You are an experienced business operations and automation consultant. "
@@ -50,25 +50,29 @@ def generate_linkedin_post(gemini_api_key: str) -> str:
         "- Output ONLY the final post text. Do not wrap in markdown code blocks or add introductory text."
     )
 
-    candidate_models = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
-    
+    candidate_models = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.0-flash"]
+    last_error = None
+
     for model_name in candidate_models:
         try:
             logger.info(f"Generating content using model: {model_name}...")
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
             if response.text and response.text.strip():
                 post_content = response.text.strip()
                 # Clean up any surrounding quotes or markdown code block markers if present
                 if post_content.startswith("```") and post_content.endswith("```"):
                     lines = post_content.splitlines()
                     post_content = "\n".join(lines[1:-1]).strip()
-                logger.info("Successfully generated LinkedIn post content.")
+                logger.info(f"Successfully generated LinkedIn post content using {model_name}.")
                 return post_content
         except Exception as e:
-            logger.warning(f"Failed with model {model_name}: {e}. Trying next available model if any...")
+            logger.warning(f"Failed with model {model_name}: {e}. Trying fallback model...")
+            last_error = e
 
-    logger.error("Failed to generate content with all attempted Gemini models.")
+    logger.error(f"Failed to generate content with all attempted Gemini models: {last_error}")
     sys.exit(1)
 
 
