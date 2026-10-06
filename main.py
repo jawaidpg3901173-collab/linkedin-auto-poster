@@ -12,6 +12,7 @@ except ImportError:
     pass
 
 from google import genai
+from google.genai import types, errors
 
 # Configure logging
 logging.basicConfig(
@@ -32,9 +33,24 @@ def get_required_env_var(var_name: str) -> str:
 
 
 def is_transient_gemini_error(error: Exception) -> bool:
-    """Return True when the Gemini error is likely transient and worth retrying."""
+    """Return True when the Gemini error is a 503 Service Unavailable or transient server error."""
+    # Specifically catch 503 Service Unavailable errors
+    if isinstance(error, errors.APIError) and getattr(error, "code", None) == 503:
+        return True
+    if isinstance(error, errors.ServerError):
+        return True
     error_text = str(error).upper()
-    transient_markers = ("429", "500", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "INTERNAL")
+    transient_markers = (
+        "503",
+        "SERVICE UNAVAILABLE",
+        "UNAVAILABLE",
+        "429",
+        "RESOURCE_EXHAUSTED",
+        "500",
+        "INTERNAL",
+        "502",
+        "504",
+    )
     return any(marker in error_text for marker in transient_markers)
 
 
@@ -58,16 +74,22 @@ def generate_linkedin_post(gemini_api_key: str) -> str:
         "- Output ONLY the final post text. Do not wrap in markdown code blocks or add introductory text."
     )
 
+    # Disable Automatic Function Calling (AFC) to silence any AFC warnings
+    generate_config = types.GenerateContentConfig(
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+    )
+
     model_name = "gemini-3.8-flash"
-    max_attempts = 3
-    retry_delay_seconds = 2
+    backoff_delays = [10, 30, 60, 90, 120]  # Longer exponential backoff up to 5 retries
+    max_attempts = len(backoff_delays)
 
     for attempt in range(1, max_attempts + 1):
         try:
-            logger.info(f"Generating content using model: {model_name}...")
+            logger.info(f"Generating content using model: {model_name} (attempt {attempt}/{max_attempts})...")
             response = client.models.generate_content(
                 model=model_name,
                 contents=prompt,
+                config=generate_config,
             )
             if response.text and response.text.strip():
                 post_content = response.text.strip()
@@ -79,9 +101,9 @@ def generate_linkedin_post(gemini_api_key: str) -> str:
                 return post_content
         except Exception as e:
             if attempt < max_attempts and is_transient_gemini_error(e):
-                delay = retry_delay_seconds * attempt
+                delay = backoff_delays[attempt - 1]
                 logger.warning(
-                    f"Transient Gemini error on attempt {attempt}/{max_attempts}: {e}. "
+                    f"503 / Transient Gemini error on attempt {attempt}/{max_attempts}: {e}. "
                     f"Retrying in {delay} seconds..."
                 )
                 time.sleep(delay)
