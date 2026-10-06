@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+import time
 import requests
 
 # Load environment variables from a .env file if available (useful for local development)
@@ -30,6 +31,13 @@ def get_required_env_var(var_name: str) -> str:
     return value.strip()
 
 
+def is_transient_gemini_error(error: Exception) -> bool:
+    """Return True when the Gemini error is likely transient and worth retrying."""
+    error_text = str(error).upper()
+    transient_markers = ("429", "500", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "INTERNAL")
+    return any(marker in error_text for marker in transient_markers)
+
+
 def generate_linkedin_post(gemini_api_key: str) -> str:
     """Generate an engaging LinkedIn post about business automation using Google Gemini API."""
     logger.info("Initializing Google Gemini API...")
@@ -50,10 +58,11 @@ def generate_linkedin_post(gemini_api_key: str) -> str:
         "- Output ONLY the final post text. Do not wrap in markdown code blocks or add introductory text."
     )
 
-    candidate_models = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.0-flash"]
-    last_error = None
+    model_name = "gemini-3.8-flash"
+    max_attempts = 3
+    retry_delay_seconds = 2
 
-    for model_name in candidate_models:
+    for attempt in range(1, max_attempts + 1):
         try:
             logger.info(f"Generating content using model: {model_name}...")
             response = client.models.generate_content(
@@ -69,10 +78,21 @@ def generate_linkedin_post(gemini_api_key: str) -> str:
                 logger.info(f"Successfully generated LinkedIn post content using {model_name}.")
                 return post_content
         except Exception as e:
-            logger.warning(f"Failed with model {model_name}: {e}. Trying fallback model...")
-            last_error = e
+            if attempt < max_attempts and is_transient_gemini_error(e):
+                delay = retry_delay_seconds * attempt
+                logger.warning(
+                    f"Transient Gemini error on attempt {attempt}/{max_attempts}: {e}. "
+                    f"Retrying in {delay} seconds..."
+                )
+                time.sleep(delay)
+                continue
 
-    logger.error(f"Failed to generate content with all attempted Gemini models: {last_error}")
+            logger.error(
+                f"Failed to generate content using {model_name} on attempt {attempt}/{max_attempts}: {e}"
+            )
+            sys.exit(1)
+
+    logger.error("Failed to generate content with Gemini after retries.")
     sys.exit(1)
 
 
