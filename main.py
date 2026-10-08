@@ -33,12 +33,17 @@ def get_required_env_var(var_name: str) -> str:
 
 
 def is_transient_gemini_error(error: Exception) -> bool:
-    """Return True when the Gemini error is a 503 Service Unavailable or transient server error."""
-    # Specifically catch 503 Service Unavailable errors
+    """Return True when the Gemini error appears to be a transient server/network issue."""
+    # Specifically catch API/server-side transient errors first.
     if isinstance(error, errors.APIError) and getattr(error, "code", None) == 503:
         return True
     if isinstance(error, errors.ServerError):
         return True
+
+    # Common transport-level transient failures from the underlying HTTP client.
+    if isinstance(error, (ConnectionError, TimeoutError, OSError)):
+        return True
+
     error_text = str(error).upper()
     transient_markers = (
         "503",
@@ -50,6 +55,10 @@ def is_transient_gemini_error(error: Exception) -> bool:
         "INTERNAL",
         "502",
         "504",
+        "SERVER DISCONNECTED WITHOUT SENDING A RESPONSE",
+        "REMOTEPROTOCOLERROR",
+        "READ TIMED OUT",
+        "CONNECTION RESET",
     )
     return any(marker in error_text for marker in transient_markers)
 
