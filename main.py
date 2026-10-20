@@ -126,7 +126,7 @@ def publish_to_linkedin(access_token: str, person_urn: str, post_content: str) -
     formatted_author = person_urn if person_urn.startswith("urn:li:person:") else f"urn:li:person:{person_urn}"
 
     headers = {
-        "Authorization": f"Bearer {access_token}",
+        "Authorization": "Bearer " + access_token,
         "Content-Type": "application/json",
         "LinkedIn-Version": "202401",
         "X-Restli-Protocol-Version": "2.0.0",
