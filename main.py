@@ -22,6 +22,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+CONTACT_BLOCK = (
+    "If you're exploring how AI can improve your operations or customer experience, "
+    "I would be happy to discuss ideas.\n"
+    "Let's connect.\n"
+    "saadbinjawaid@gmail.com\n"
+    "www.saadbinjawaid.dev"
+)
+
 
 def get_required_env_var(var_name: str) -> str:
     """Retrieve and validate an environment variable."""
@@ -60,17 +68,29 @@ def generate_linkedin_post(gemini_api_key: str) -> str:
     client = genai.Client(api_key=gemini_api_key)
 
     prompt = (
-        "You are an experienced business operations and automation consultant. "
-        "Write a concise, high-value, and authentic LinkedIn post about automating business tasks.\n\n"
+        "You are Saad Bin Jawaid, an AI Engineer and technology leader with 6+ years of "
+        "experience in AI, machine learning, and software engineering. "
+        "You lead AI initiatives and build practical, scalable solutions that turn business "
+        "data into clarity, automate workflows, reduce operational costs, improve customer "
+        "experience, and support smarter decisions.\n\n"
+        "Write a concise, high-value, and authentic LinkedIn post related only to this work. "
+        "Choose one focused topic per post from areas such as AI assistants and chatbots, "
+        "RAG and intelligent search, workflow automation, predictive analytics, custom AI "
+        "solutions, AI adoption, or measurable improvements to business operations. "
+        "Do not invent clients, projects, credentials, statistics, or results that were not "
+        "provided. Do not write generic content unrelated to AI, automation, data, software "
+        "engineering, or customer experience.\n\n"
         "Guidelines:\n"
         "- Hook the reader in the first 2 lines with a relatable business challenge or observation.\n"
-        "- Share 3-4 practical, actionable insights on how businesses can automate repetitive workflows "
-        "(e.g., customer follow-ups, reporting, data sync, email triage, or AI-assisted operations).\n"
-        "- Focus on tangible outcomes: hours saved, reduced errors, and freeing teams for strategic growth.\n"
+        "- Share 3-4 practical, actionable insights that a business can apply.\n"
+        "- Explain tangible outcomes such as saved time, lower costs, fewer errors, faster decisions, "
+        "better customer support, or confident scaling without making unsupported numerical claims.\n"
         "- Maintain a professional, approachable, and non-preachy tone.\n"
         "- Do NOT use robotic cliché phrases like 'In today's fast-paced world' or 'Dive in'.\n"
         "- Conclude with a thought-provoking question to invite comments.\n"
-        "- Add 3-5 relevant, focused hashtags at the end (e.g., #BusinessAutomation #Productivity #WorkflowOptimization).\n"
+        "- Add 3-5 relevant, focused hashtags before the contact block "
+        "(e.g., #ArtificialIntelligence #BusinessAutomation #CustomerExperience).\n"
+        f"- End with this exact contact block, preserving its wording and line breaks:\n{CONTACT_BLOCK}\n"
         "- Output ONLY the final post text. Do not wrap in markdown code blocks or add introductory text."
     )
 
@@ -97,6 +117,8 @@ def generate_linkedin_post(gemini_api_key: str) -> str:
                 if post_content.startswith("```") and post_content.endswith("```"):
                     lines = post_content.splitlines()
                     post_content = "\n".join(lines[1:-1]).strip()
+                if not post_content.endswith(CONTACT_BLOCK):
+                    post_content = post_content.rstrip() + "\n\n" + CONTACT_BLOCK
                 logger.info(f"Successfully generated LinkedIn post content using {model_name}.")
                 return post_content
         except Exception as e:
