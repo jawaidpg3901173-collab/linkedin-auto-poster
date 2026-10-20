@@ -128,7 +128,7 @@ def publish_to_linkedin(access_token: str, person_urn: str, post_content: str) -
     headers = {
         "Authorization": "Bearer " + access_token,
         "Content-Type": "application/json",
-        "LinkedIn-Version": "202401",
+        "LinkedIn-Version": "202601",
         "X-Restli-Protocol-Version": "2.0.0",
     }
 
