@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 import time
+from datetime import date
 import requests
 
 # Load environment variables from a .env file if available (useful for local development)
@@ -30,6 +31,16 @@ CONTACT_BLOCK = (
     "www.saadbinjawaid.dev"
 )
 
+POST_TOPICS = (
+    "AI assistants and chatbots for faster, more consistent customer support",
+    "RAG and intelligent search for turning company knowledge into useful answers",
+    "workflow automation that removes repetitive handoffs and manual data entry",
+    "predictive analytics for making better operational decisions",
+    "custom AI solutions that fit a business's existing processes",
+    "practical AI adoption and how teams can introduce it responsibly",
+    "measurable improvements to business operations through AI and automation",
+)
+
 
 def get_required_env_var(var_name: str) -> str:
     """Retrieve and validate an environment variable."""
@@ -38,6 +49,16 @@ def get_required_env_var(var_name: str) -> str:
         logger.error(f"Missing required environment variable: {var_name}")
         sys.exit(1)
     return value.strip()
+
+
+def get_post_topic() -> str:
+    """Choose a topic that rotates between scheduled and manual workflow runs."""
+    run_number = os.getenv("GITHUB_RUN_NUMBER")
+    if run_number and run_number.isdigit():
+        topic_index = int(run_number) - 1
+    else:
+        topic_index = date.today().toordinal()
+    return POST_TOPICS[topic_index % len(POST_TOPICS)]
 
 
 def is_transient_gemini_error(error: Exception) -> bool:
@@ -66,6 +87,8 @@ def generate_linkedin_post(gemini_api_key: str) -> str:
     """Generate an engaging LinkedIn post about business automation using Google Gemini API."""
     logger.info("Initializing Google Gemini API...")
     client = genai.Client(api_key=gemini_api_key)
+    topic = get_post_topic()
+    logger.info("Selected post topic: %s", topic)
 
     prompt = (
         "You are Saad Bin Jawaid, an AI Engineer and technology leader with 6+ years of "
@@ -80,6 +103,7 @@ def generate_linkedin_post(gemini_api_key: str) -> str:
         "Do not invent clients, projects, credentials, statistics, or results that were not "
         "provided. Do not write generic content unrelated to AI, automation, data, software "
         "engineering, or customer experience.\n\n"
+        f"For this run, focus specifically on: {topic}. Do not switch to another topic.\n\n"
         "Guidelines:\n"
         "- Hook the reader in the first 2 lines with a relatable business challenge or observation.\n"
         "- Share 3-4 practical, actionable insights that a business can apply.\n"
@@ -99,44 +123,52 @@ def generate_linkedin_post(gemini_api_key: str) -> str:
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
     )
 
-    model_name = "gemini-3.8-flash"
+    configured_model = (os.getenv("GEMINI_MODEL") or "gemini-2.5-flash").strip()
+    model_names = tuple(dict.fromkeys((configured_model, "gemini-2.5-flash", "gemini-2.0-flash")))
     backoff_delays = [10, 30, 60, 90, 120]  # Longer exponential backoff up to 5 retries
-    max_attempts = len(backoff_delays)
-
-    for attempt in range(1, max_attempts + 1):
-        try:
-            logger.info(f"Generating content using model: {model_name} (attempt {attempt}/{max_attempts})...")
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=generate_config,
-            )
-            if response.text and response.text.strip():
-                post_content = response.text.strip()
-                # Clean up any surrounding quotes or markdown code block markers if present
-                if post_content.startswith("```") and post_content.endswith("```"):
-                    lines = post_content.splitlines()
-                    post_content = "\n".join(lines[1:-1]).strip()
-                if not post_content.endswith(CONTACT_BLOCK):
-                    post_content = post_content.rstrip() + "\n\n" + CONTACT_BLOCK
-                logger.info(f"Successfully generated LinkedIn post content using {model_name}.")
-                return post_content
-        except Exception as e:
-            if attempt < max_attempts and is_transient_gemini_error(e):
-                delay = backoff_delays[attempt - 1]
-                logger.warning(
-                    f"503 / Transient Gemini error on attempt {attempt}/{max_attempts}: {e}. "
-                    f"Retrying in {delay} seconds..."
+    for model_name in model_names:
+        for attempt, delay in enumerate([0, *backoff_delays], start=1):
+            try:
+                logger.info(
+                    "Generating content using model: %s (attempt %s/%s)...",
+                    model_name,
+                    attempt,
+                    len(backoff_delays) + 1,
                 )
-                time.sleep(delay)
-                continue
+                if delay:
+                    time.sleep(delay)
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=generate_config,
+                )
+                if response.text and response.text.strip():
+                    post_content = response.text.strip()
+                    if post_content.startswith("```") and post_content.endswith("```"):
+                        lines = post_content.splitlines()
+                        post_content = "\n".join(lines[1:-1]).strip()
+                    if not post_content.endswith(CONTACT_BLOCK):
+                        post_content = post_content.rstrip() + "\n\n" + CONTACT_BLOCK
+                    logger.info("Successfully generated LinkedIn post using %s.", model_name)
+                    return post_content
+                raise RuntimeError(f"Gemini returned an empty response from {model_name}")
+            except Exception as error:
+                if is_transient_gemini_error(error) and attempt <= len(backoff_delays):
+                    logger.warning(
+                        "Transient Gemini error using %s on attempt %s: %s. Retrying...",
+                        model_name,
+                        attempt,
+                        error,
+                    )
+                    continue
+                if is_transient_gemini_error(error) and model_name != model_names[-1]:
+                    logger.warning("Model %s remains unavailable; trying the fallback model.", model_name)
+                    break
+                logger.error("Failed to generate content using %s: %s", model_name, error)
+                if not is_transient_gemini_error(error):
+                    sys.exit(1)
 
-            logger.error(
-                f"Failed to generate content using {model_name} on attempt {attempt}/{max_attempts}: {e}"
-            )
-            sys.exit(1)
-
-    logger.error("Failed to generate content with Gemini after retries.")
+    logger.error("Failed to generate content with Gemini using all configured models.")
     sys.exit(1)
 
 

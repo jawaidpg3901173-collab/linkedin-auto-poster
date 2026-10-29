@@ -162,6 +162,28 @@ on:
 ```
 GitHub Actions will automatically wake up and publish your post every day at **9:00 AM UTC**.
 
+### What kind of posts does it publish?
+
+The generator writes one focused, practical post about Saad's AI engineering
+work. Topics rotate by workflow run:
+
+1. AI assistants and chatbots for customer support
+2. RAG and intelligent search
+3. Workflow automation and removal of repetitive work
+4. Predictive analytics for operational decisions
+5. Custom AI solutions
+6. Practical and responsible AI adoption
+7. Measurable business improvements through AI and automation
+
+Every post must start with a business-relevant hook, include 3–4 actionable
+insights, explain realistic outcomes without inventing evidence, and end with a
+question, 3–5 focused hashtags, and the configured contact block.
+
+The workflow uses `gemini-2.5-flash` by default and falls back to another flash
+model when Gemini reports a temporary service-unavailable error. Set
+`GEMINI_MODEL` in local `.env` development if a different supported model is
+required.
+
 ---
 
 ## 💻 Local Development & Testing
