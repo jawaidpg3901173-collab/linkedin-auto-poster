@@ -83,6 +83,16 @@ def is_transient_gemini_error(error: Exception) -> bool:
     return any(marker in error_text for marker in transient_markers)
 
 
+def is_unavailable_gemini_model(error: Exception) -> bool:
+    """Return True when Gemini rejects the selected model as unavailable."""
+    if isinstance(error, errors.APIError) and getattr(error, "code", None) == 404:
+        return True
+    error_text = str(error).upper()
+    return "404" in error_text and (
+        "MODEL" in error_text or "NOT_FOUND" in error_text or "NO LONGER AVAILABLE" in error_text
+    )
+
+
 def generate_linkedin_post(gemini_api_key: str) -> str:
     """Generate an engaging LinkedIn post about business automation using Google Gemini API."""
     logger.info("Initializing Google Gemini API...")
@@ -123,8 +133,17 @@ def generate_linkedin_post(gemini_api_key: str) -> str:
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
     )
 
-    configured_model = (os.getenv("GEMINI_MODEL") or "gemini-2.5-flash").strip()
-    model_names = tuple(dict.fromkeys((configured_model, "gemini-2.5-flash", "gemini-2.0-flash")))
+    configured_model = (os.getenv("GEMINI_MODEL") or "gemini-flash-latest").strip()
+    model_names = tuple(
+        dict.fromkeys(
+            (
+                configured_model,
+                "gemini-3.8-flash",
+                "gemini-flash-latest",
+                "gemini-2.5-flash",
+            )
+        )
+    )
     backoff_delays = [10, 30, 60, 90, 120]  # Longer exponential backoff up to 5 retries
     for model_name in model_names:
         for attempt, delay in enumerate([0, *backoff_delays], start=1):
@@ -153,6 +172,15 @@ def generate_linkedin_post(gemini_api_key: str) -> str:
                     return post_content
                 raise RuntimeError(f"Gemini returned an empty response from {model_name}")
             except Exception as error:
+                if is_unavailable_gemini_model(error):
+                    if model_name != model_names[-1]:
+                        logger.warning(
+                            "Gemini model %s is unavailable; trying the next supported model.",
+                            model_name,
+                        )
+                        break
+                    logger.error("Gemini model %s is unavailable: %s", model_name, error)
+                    sys.exit(1)
                 if is_transient_gemini_error(error) and attempt <= len(backoff_delays):
                     logger.warning(
                         "Transient Gemini error using %s on attempt %s: %s. Retrying...",

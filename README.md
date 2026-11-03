@@ -15,7 +15,7 @@ The project is fully automated via **GitHub Actions**, scheduled to run every da
 ├── .env.example             # Template for local environment variables
 ├── .gitignore               # Ignores venv, pycache, and secrets
 ├── main.py                  # Core script: calls Gemini & posts to LinkedIn
-├── requirements.txt         # Dependencies (google-generativeai, requests, python-dotenv)
+├── requirements.txt         # Dependencies (google-genai, requests, python-dotenv)
 └── README.md                # Complete setup and credential instructions
 ```
 
@@ -179,10 +179,10 @@ Every post must start with a business-relevant hook, include 3–4 actionable
 insights, explain realistic outcomes without inventing evidence, and end with a
 question, 3–5 focused hashtags, and the configured contact block.
 
-The workflow uses `gemini-2.5-flash` by default and falls back to another flash
-model when Gemini reports a temporary service-unavailable error. Set
-`GEMINI_MODEL` in local `.env` development if a different supported model is
-required.
+The workflow uses the `gemini-flash-latest` alias by default. If a configured
+model is retired or unavailable, the script tries current supported flash
+models automatically. Set `GEMINI_MODEL` in local `.env` development if a
+different supported model is required.
 
 ---
 
