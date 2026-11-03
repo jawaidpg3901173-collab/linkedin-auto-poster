@@ -79,6 +79,8 @@ def is_transient_gemini_error(error: Exception) -> bool:
         "INTERNAL",
         "502",
         "504",
+        "TIMEOUT",
+        "TIMED OUT",
     )
     return any(marker in error_text for marker in transient_markers)
 
@@ -96,7 +98,10 @@ def is_unavailable_gemini_model(error: Exception) -> bool:
 def generate_linkedin_post(gemini_api_key: str) -> str:
     """Generate an engaging LinkedIn post about business automation using Google Gemini API."""
     logger.info("Initializing Google Gemini API...")
-    client = genai.Client(api_key=gemini_api_key)
+    client = genai.Client(
+        api_key=gemini_api_key,
+        http_options=types.HttpOptions(timeout=60_000),
+    )
     topic = get_post_topic()
     logger.info("Selected post topic: %s", topic)
 
