@@ -138,18 +138,19 @@ def generate_linkedin_post(gemini_api_key: str) -> str:
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
     )
 
-    configured_model = (os.getenv("GEMINI_MODEL") or "gemini-flash-latest").strip()
+    configured_model = (os.getenv("GEMINI_MODEL") or "gemini-3.1-flash-lite").strip()
     model_names = tuple(
         dict.fromkeys(
             (
                 configured_model,
-                "gemini-3.8-flash",
-                "gemini-flash-latest",
+                "gemini-3.1-flash-lite",
+                "gemini-2.5-flash-lite",
+                "gemini-flash-lite-latest",
                 "gemini-2.5-flash",
             )
         )
     )
-    backoff_delays = [10, 30, 60, 90, 120]  # Longer exponential backoff up to 5 retries
+    backoff_delays = [5]  # Move to a fallback model quickly when a model is overloaded.
     for model_name in model_names:
         for attempt, delay in enumerate([0, *backoff_delays], start=1):
             try:
